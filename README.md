@@ -19,43 +19,45 @@ A powerful Chrome extension that automatically solves multiple choice questions 
 git clone https://github.com/adityasd314/MCQ-Solver.git
 
 # Or download ZIP and extract
-wget https://github.com/adityasd314/MCQ-Solver/archive/main.zip
-unzip main.zip
+wget https://github.com/adityasd314/MCQ-Solver/archive/refs/heads/master.zip
+unzip master.zip
 ```
 
 ### Step 2: Load Extension in Chrome
 
 1. **Open Chrome Extensions Management:**
+
    ```
    Navigate to: chrome://extensions/
    ```
-
 2. **Enable Developer Mode:**
-   - Toggle the "Developer mode" switch in the top-right corner
 
+   - Toggle the "Developer mode" switch in the top-right corner
 3. **Load the Extension:**
+
    - Click "Load unpacked" button
    - Navigate to and select the `MCQ-Solver` folder
    - Extension should appear in your extensions list
-
 4. **Pin to Toolbar (Recommended):**
+
    - Click the puzzle piece icon in Chrome toolbar
    - Find "MCQ Auto Solver" and click the pin icon
 
 ### Step 3: Obtain Gemini API Key
 
 1. **Visit Google AI Studio:**
+
    ```
    https://aistudio.google.com/apikey
    ```
-
 2. **Create API Key:**
+
    - Sign in with your Google account
    - Click "Create API key"
    - Select "Create API key in new project"
    - **Important:** Copy and securely store this key
-
 3. **Free Tier Limits:**
+
    - 60 requests per minute
    - 1,500 requests per day
    - No credit card required
@@ -91,18 +93,19 @@ The selector must target a container that includes the complete question: text, 
 #### Selector Types
 
 1. **Class Selector (.)** - Most common
+
    ```css
    .gcb-question-row      /* NPTEL/SWAYAM */
    .question-item         /* Generic platforms */
    .quiz-question         /* Quiz platforms */
    ```
-
 2. **ID Selector (#)** - Less common
+
    ```css
    #question-1            /* Specific question */
    ```
-
 3. **Attribute Selector** - For data attributes
+
    ```css
    [data-question]        /* Elements with data-question attribute */
    ```
@@ -124,17 +127,18 @@ The selector must target a container that includes the complete question: text, 
 
 ### Platform-Specific Selectors
 
-| Platform | Selector | Notes |
-|----------|----------|-------|
-| NPTEL/SWAYAM | `.gcb-question-row` | Default, works for most NPTEL courses |
-| Google Forms | `.freebirdFormviewerViewItemsItemItem` | For Google Form quizzes |
-| Moodle | `.que.multichoice` | Moodle LMS platform |
-| Canvas | `.question.multiple_choice_question` | Canvas LMS |
-| Custom | Use browser inspector | Follow the detection method above |
+| Platform     | Selector                                 | Notes                                 |
+| ------------ | ---------------------------------------- | ------------------------------------- |
+| NPTEL/SWAYAM | `.gcb-question-row`                    | Default, works for most NPTEL courses |
+| Google Forms | `.freebirdFormviewerViewItemsItemItem` | For Google Form quizzes               |
+| Moodle       | `.que.multichoice`                     | Moodle LMS platform                   |
+| Canvas       | `.question.multiple_choice_question`   | Canvas LMS                            |
+| Custom       | Use browser inspector                    | Follow the detection method above     |
 
 ### Verifying Selector Completeness
 
 Your selector should capture this complete structure:
+
 ```html
 <div class="gcb-question-row">               <!-- Your selector targets this -->
   <div class="question-text">
@@ -166,12 +170,10 @@ MCQ-Solver/
 
 ### Code Components
 
-#### 
-
 manifest.json
 
-
 Defines extension permissions and configuration:
+
 ```json
 {
   "permissions": ["activeTab", "storage"],
@@ -180,12 +182,10 @@ Defines extension permissions and configuration:
 }
 ```
 
-#### 
-
 content.js
 
- - Main Logic
-**Key Functions:**
+- Main Logic
+  **Key Functions:**
 - `solveMCQs()`: Main orchestrator, processes questions in batches
 - `captureElementScreenshot()`: Screenshots individual questions using html2canvas
 - `getSingleAnswerFromGemini()`: Sends image to Gemini API and parses response
@@ -193,6 +193,7 @@ content.js
 - `preprocessCORSImages()`: Handles cross-origin image issues
 
 **Message Handlers:**
+
 ```javascript
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'checkElement') // Count questions
@@ -201,23 +202,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 ```
 
-#### 
-
 popup.js
 
- - UI Logic
-**Key Functions:**
+- UI Logic
+  **Key Functions:**
 - Settings management (API key, selectors, domain context)
 - User input validation
 - Status updates and error handling
 - Chrome storage integration
 
-#### 
-
 background.js
 
- - Service Worker
-**Key Functions:**
+- Service Worker
+  **Key Functions:**
 - `fetchImage()`: Bypasses CORS by fetching images from background script
 - Message routing between popup and content scripts
 - API call coordination
@@ -227,17 +224,18 @@ background.js
 #### Setting Up Development
 
 1. **Clone and setup:**
+
    ```bash
    git clone https://github.com/adityasd314/MCQ-Solver.git
    cd MCQ-Solver
    ```
-
 2. **Load in Chrome:**
+
    - Go to `chrome://extensions/`
    - Enable Developer mode
    - Load unpacked extension
-
 3. **Development cycle:**
+
    - Make changes to code
    - Click reload button in extensions page
    - Test on quiz pages
