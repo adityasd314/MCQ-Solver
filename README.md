@@ -240,23 +240,6 @@ background.js
    - Click reload button in extensions page
    - Test on quiz pages
 
-#### Code Style Guidelines
-
-- Use descriptive function names
-- Add console.log statements for debugging
-- Handle errors gracefully with try-catch
-- Use async/await for API calls
-- Comment complex logic sections
-
-#### Testing Checklist
-
-- [ ] Extension loads without errors
-- [ ] Question detection works on target platforms
-- [ ] Screenshot capture includes all question elements
-- [ ] API calls succeed with valid responses
-- [ ] Answer selection clicks correct radio buttons
-- [ ] Error handling displays helpful messages
-- [ ] Settings persist across browser sessions
 
 ### Contributing Process
 
