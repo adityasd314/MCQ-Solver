@@ -4,7 +4,7 @@
 ![Chrome](https://img.shields.io/badge/chrome-extension-orange.svg)
 
 A powerful Chrome extension that automatically solves multiple choice questions using Google's Gemini 2.5 Flash AI. Built for students, professionals, and anyone dealing with online MCQ assessments.
-[![Usage Example](https://raw.githubusercontent.com/adityasd314/MCQ-Solver/master/image/README/1754422638903.png)](https://raw.githubusercontent.com/adityasd314/MCQ-Solver/master/video/tut.gif.crdownload)
+![](https://github.com/adityasd314/MCQ-Solver/blob/master/video/tut.gif)
 
 ## 📋 Prerequisites
 
