@@ -3,7 +3,7 @@
 <head>
     <style>
         body {
-            width: 300px;
+            width: 350px;
             padding: 20px;
             font-family: Arial, sans-serif;
         }
@@ -30,12 +30,31 @@
         .success { background: #d4edda; color: #155724; }
         .error { background: #f8d7da; color: #721c24; }
         .warning { background: #fff3cd; color: #856404; }
-        input {
+        input, textarea {
             width: 100%;
             padding: 8px;
             margin: 5px 0;
             border: 1px solid #ddd;
             border-radius: 3px;
+            box-sizing: border-box;
+        }
+        textarea {
+            height: 60px;
+            resize: vertical;
+        }
+        .form-group {
+            margin: 10px 0;
+            text-align: left;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .help-text {
+            font-size: 11px;
+            color: #666;
+            margin-top: 2px;
         }
     </style>
 </head>
@@ -43,16 +62,28 @@
     <div class="container">
         <h3>MCQ Auto Solver</h3>
         
-        <div>
+        <div class="form-group">
             <label>Gemini API Key:</label>
             <input type="password" id="apiKey" placeholder="Enter your Gemini API key">
             <button id="saveKey">Save Key</button>
         </div>
         
+        <div class="form-group">
+            <label>Question Selector:</label>
+            <input type="text" id="questionSelector" placeholder=".gcb-question-row" value=".gcb-question-row">
+            <div class="help-text">CSS selector to find question elements</div>
+        </div>
+        
+        <div class="form-group">
+            <label>Domain Context (Optional):</label>
+            <textarea id="domainContext" placeholder="e.g., Computer Science, Mathematics, Physics, History, etc. Leave empty for general questions"></textarea>
+            <div class="help-text">Helps AI understand the subject domain for better accuracy</div>
+        </div>
+        
         <div id="status" class="status" style="display: none;"></div>
         
         <button id="solveMCQ">Solve MCQs</button>
-        <button id="checkElement">Check Element</button>
+        <button id="checkElement">Check Questions</button>
         <button id="testScreenshot">Test Screenshot</button>
     </div>
 
