@@ -8,6 +8,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const testScreenshotBtn = document.getElementById('testScreenshot');
     const statusDiv = document.getElementById('status');
 
+    // Listen for progress updates from content script
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        if (request.action === 'updateProgress') {
+            showStatus(request.message, request.type);
+        }
+    });
+
     // Load saved values
     chrome.storage.sync.get(['geminiApiKey', 'questionSelector', 'domainContext'], function(result) {
         if (result.geminiApiKey) {
@@ -40,7 +47,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Check questions
+    // Check questions with smart detection
     checkElementBtn.addEventListener('click', function() {
         const questionSelector = questionSelectorInput.value.trim() || '.gcb-question-row';
         
@@ -50,9 +57,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 questionSelector: questionSelector
             }, function(response) {
                 if (response && response.exists) {
-                    showStatus(`Found ${response.count} questions with selector "${response.selector}"`, 'success');
+                    let message = `Found ${response.count} questions`;
+                    if (response.autoDetected) {
+                        message += ` (${response.message})`;
+                        // Update the selector input with auto-detected value
+                        questionSelectorInput.value = response.selector;
+                    } else {
+                        message += ` with selector "${response.selector}"`;
+                    }
+                    showStatus(message, 'success');
                 } else {
-                    showStatus(`No questions found with selector "${questionSelector}"`, 'warning');
+                    showStatus(`No questions found with selector "${questionSelector}". Try smart detection or check the selector.`, 'warning');
                 }
             });
         });
@@ -77,7 +92,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Solve MCQs
+    // Solve MCQs with enhanced progress tracking
     solveMCQBtn.addEventListener('click', function() {
         const questionSelector = questionSelectorInput.value.trim() || '.gcb-question-row';
         
@@ -87,7 +102,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            showStatus('Solving MCQs...', 'warning');
+            // Disable button during processing
+            solveMCQBtn.disabled = true;
+            solveMCQBtn.textContent = 'Processing...';
+            showStatus('Starting MCQ solving process...', 'progress');
             
             chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
                 chrome.tabs.sendMessage(tabs[0].id, {
@@ -96,6 +114,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     questionSelector: questionSelector,
                     domainContext: result.domainContext || ''
                 }, function(response) {
+                    // Re-enable button
+                    solveMCQBtn.disabled = false;
+                    solveMCQBtn.textContent = 'Solve MCQs';
+                    
                     if (response && response.success) {
                         showStatus(response.message, 'success');
                     } else {
@@ -111,8 +133,11 @@ document.addEventListener('DOMContentLoaded', function() {
         statusDiv.className = `status ${type}`;
         statusDiv.style.display = 'block';
         
-        setTimeout(() => {
-            statusDiv.style.display = 'none';
-        }, 5000);
+        // Don't auto-hide progress messages
+        if (type !== 'progress') {
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 5000);
+        }
     }
 });

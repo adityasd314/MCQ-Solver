@@ -5,11 +5,29 @@ console.log('MCQ Solver content script loaded');
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'checkElement') {
         const questionSelector = request.questionSelector || '.gcb-question-row';
-        const elements = document.querySelectorAll(questionSelector);
+        let elements = document.querySelectorAll(questionSelector);
+        
+        // If no elements found, try smart detection
+        if (elements.length === 0) {
+            const smartSelector = findQuestionSelector();
+            if (smartSelector) {
+                elements = document.querySelectorAll(smartSelector);
+                sendResponse({
+                    exists: elements.length > 0,
+                    count: elements.length,
+                    selector: smartSelector,
+                    autoDetected: true,
+                    message: `Auto-detected selector: ${smartSelector}`
+                });
+                return;
+            }
+        }
+        
         sendResponse({
             exists: elements.length > 0,
             count: elements.length,
-            selector: questionSelector
+            selector: questionSelector,
+            autoDetected: false
         });
     }
     
@@ -32,11 +50,172 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 });
 
+// Smart question selector detection
+function findQuestionSelector() {
+    console.log('🔍 Starting smart question detection...');
+    
+    // Find all radio button inputs
+    const radioInputs = document.querySelectorAll('input[type="radio"]');
+    if (radioInputs.length === 0) {
+        console.warn('No radio inputs found on page');
+        return null;
+    }
+    
+    console.log(`Found ${radioInputs.length} radio inputs`);
+    
+    // Group radio inputs by their name attribute (questions have same name)
+    const questionGroups = {};
+    radioInputs.forEach(radio => {
+        const name = radio.name;
+        if (name) {
+            if (!questionGroups[name]) {
+                questionGroups[name] = [];
+            }
+            questionGroups[name].push(radio);
+        }
+    });
+    
+    const questionNames = Object.keys(questionGroups);
+    console.log(`Found ${questionNames.length} question groups:`, questionNames);
+    
+    if (questionNames.length === 0) {
+        return null;
+    }
+    
+    // Find common parent container for each question group
+    const questionContainers = [];
+    questionNames.forEach(name => {
+        const radios = questionGroups[name];
+        const container = findCommonParent(radios);
+        if (container) {
+            questionContainers.push(container);
+        }
+    });
+    
+    if (questionContainers.length === 0) {
+        return null;
+    }
+    
+    // Find the most specific common selector
+    const selector = findBestSelector(questionContainers);
+    console.log(`🎯 Smart detection found selector: ${selector}`);
+    
+    return selector;
+}
+
+function findCommonParent(elements) {
+    if (elements.length === 0) return null;
+    if (elements.length === 1) return elements[0].closest('div, section, article, form');
+    
+    let commonParent = elements[0];
+    
+    // Find the deepest common ancestor
+    for (let i = 1; i < elements.length; i++) {
+        commonParent = findDeepestCommonAncestor(commonParent, elements[i]);
+        if (!commonParent) break;
+    }
+    
+    // Move up to find a more semantic container
+    while (commonParent && !isGoodQuestionContainer(commonParent)) {
+        commonParent = commonParent.parentElement;
+    }
+    
+    return commonParent;
+}
+
+function findDeepestCommonAncestor(elem1, elem2) {
+    const ancestors1 = getAncestors(elem1);
+    const ancestors2 = getAncestors(elem2);
+    
+    let common = null;
+    for (let i = 0; i < Math.min(ancestors1.length, ancestors2.length); i++) {
+        if (ancestors1[i] === ancestors2[i]) {
+            common = ancestors1[i];
+        } else {
+            break;
+        }
+    }
+    
+    return common;
+}
+
+function getAncestors(element) {
+    const ancestors = [];
+    let current = element;
+    while (current && current !== document.body) {
+        ancestors.unshift(current);
+        current = current.parentElement;
+    }
+    return ancestors;
+}
+
+function isGoodQuestionContainer(element) {
+    const text = element.textContent.trim();
+    const hasRadios = element.querySelectorAll('input[type="radio"]').length >= 2;
+    const hasSubstantialText = text.length > 20;
+    const hasQuestionKeywords = /question|mcq|choice|quiz|assessment|problem/i.test(element.className + ' ' + element.getAttribute('data-*'));
+    
+    return hasRadios && hasSubstantialText;
+}
+
+function findBestSelector(containers) {
+    // Try to find a common class or attribute
+    const classes = new Map();
+    const tagNames = new Map();
+    
+    containers.forEach(container => {
+        // Count tag names
+        const tag = container.tagName.toLowerCase();
+        tagNames.set(tag, (tagNames.get(tag) || 0) + 1);
+        
+        // Count classes
+        if (container.className) {
+            container.className.split(' ').forEach(cls => {
+                if (cls.trim()) {
+                    classes.set(cls.trim(), (classes.get(cls.trim()) || 0) + 1);
+                }
+            });
+        }
+    });
+    
+    // Find most common class that appears in all containers
+    const containerCount = containers.length;
+    for (let [className, count] of classes.entries()) {
+        if (count === containerCount && className.length > 0) {
+            return `.${className}`;
+        }
+    }
+    
+    // Fallback to most common tag
+    let mostCommonTag = 'div';
+    let maxCount = 0;
+    for (let [tag, count] of tagNames.entries()) {
+        if (count > maxCount) {
+            maxCount = count;
+            mostCommonTag = tag;
+        }
+    }
+    
+    return mostCommonTag;
+}
+
 async function testScreenshot(questionSelector = '.gcb-question-row') {
     try {
-        const questionElements = document.querySelectorAll(questionSelector);
+        let questionElements = document.querySelectorAll(questionSelector);
+        
+        // Try smart detection if no elements found
         if (questionElements.length === 0) {
-            throw new Error(`No elements found with selector "${questionSelector}"`);
+            const smartSelector = findQuestionSelector();
+            if (smartSelector) {
+                questionElements = document.querySelectorAll(smartSelector);
+                if (questionElements.length > 0) {
+                    console.log(`✅ Smart detection successful: ${smartSelector}`);
+                }
+            }
+        }
+        
+        if (questionElements.length === 0) {
+            throw new Error(`No elements found with selector "${questionSelector}". Try using smart detection.`);
         }
 
         console.log(`Testing screenshot for ${questionElements.length} questions`);
@@ -57,87 +236,232 @@ async function testScreenshot(questionSelector = '.gcb-question-row') {
     }
 }
 
-async function solveMCQs(apiKey, questionSelector = '.gcb-question-row', domainContext='') {
+// Updated solveMCQs function with parallel processing
+async function solveMCQs(apiKey, questionSelector = '.gcb-question-row', domainContext = '') {
     try {
-        const questionElements = document.querySelectorAll(questionSelector);
+        let questionElements = document.querySelectorAll(questionSelector);
+        
+        // Try smart detection if no elements found
         if (questionElements.length === 0) {
-            throw new Error(`No questions found with selector "${questionSelector}"`);
-        }
-        if (domainContext) {
-            console.log(`Using domain context: ${domainContext}`);
-        }
-
-        console.log(`Found ${questionElements.length} questions to solve`);
-        
-        // Process questions in batches to respect rate limits
-        const batchSize = 10; // Adjust based on Gemini's rate limits
-        const results = [];
-        
-        for (let i = 0; i < questionElements.length; i += batchSize) {
-            const batch = Array.from(questionElements).slice(i, i + batchSize);
-            console.log(`Processing batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(questionElements.length/batchSize)}`);
-            
-            // Process batch in parallel
-            const batchPromises = batch.map(async (element, batchIndex) => {
-                const questionIndex = i + batchIndex;
-                try {
-                    // Capture screenshot of individual question
-                    const screenshot = await captureElementScreenshot(element, questionIndex);
-                    
-                    // Get answer from Gemini for this specific question
-                    const answer = await getSingleAnswerFromGemini(screenshot, apiKey, questionIndex + 1);
-                    
-                    // Select the answer for this question
-                    await selectAnswerForQuestion(element, answer, questionIndex + 1);
-                    
-                    return {
-                        questionIndex: questionIndex + 1,
-                        answer: answer,
-                        success: true
-                    };
-                } catch (error) {
-                    console.error(`Error processing question ${questionIndex + 1}:`, error);
-                    return {
-                        questionIndex: questionIndex + 1,
-                        error: error.message,
-                        success: false
-                    };
+            console.log('🔍 No questions found with provided selector, trying smart detection...');
+            const smartSelector = findQuestionSelector();
+            if (smartSelector) {
+                questionElements = document.querySelectorAll(smartSelector);
+                if (questionElements.length > 0) {
+                    console.log(`✅ Smart detection found ${questionElements.length} questions with selector: ${smartSelector}`);
+                    showProgress(`Auto-detected selector: ${smartSelector}`, 'info');
+                    await new Promise(resolve => setTimeout(resolve, 2000));
                 }
-            });
-            
-            const batchResults = await Promise.all(batchPromises);
-            results.push(...batchResults);
-            
-            // Add delay between batches to respect rate limits
-            if (i + batchSize < questionElements.length) {
-                console.log('Waiting before next batch...');
-                await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay
             }
         }
         
-        const successfulAnswers = results.filter(r => r.success);
-        const failedAnswers = results.filter(r => !r.success);
+        if (questionElements.length === 0) {
+            throw new Error(`No questions found. Please check the question selector or try manual detection.`);
+        }
+
+        console.log(`Found ${questionElements.length} questions to solve`);
+        if (domainContext) {
+            console.log(`Using domain context: ${domainContext}`);
+        }
+        
+        showProgress(`Starting to solve ${questionElements.length} questions in parallel...`, 'info');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Process all questions in parallel
+        const questionPromises = Array.from(questionElements).map(async (element, index) => {
+            const questionIndex = index + 1;
+            
+            try {
+                showProgress(`📸 Starting question ${questionIndex}/${questionElements.length}...`, 'progress');
+                
+                // Capture screenshot
+                const screenshot = await captureElementScreenshot(element, index);
+                
+                // Get answer with retry logic (each question handles its own retries)
+                showProgress(`🤖 Processing AI request for question ${questionIndex}/${questionElements.length}...`, 'progress');
+                const answer = await getAnswerWithRetry(screenshot, apiKey, questionIndex, domainContext);
+                
+                // Select answer
+                await selectAnswerForQuestion(element, answer, questionIndex);
+                
+                showProgress(`✅ Question ${questionIndex} completed successfully!`, 'success');
+                
+                return {
+                    questionIndex: questionIndex,
+                    answer: answer,
+                    success: true
+                };
+                
+            } catch (error) {
+                console.error(`Error processing question ${questionIndex}:`, error);
+                showProgress(`❌ Question ${questionIndex} failed: ${error.message}`, 'error');
+                
+                return {
+                    questionIndex: questionIndex,
+                    error: error.message,
+                    success: false
+                };
+            }
+        });
+        
+        // Wait for all questions to complete
+        showProgress(`🔄 Processing all ${questionElements.length} questions in parallel...`, 'progress');
+        const results = await Promise.allSettled(questionPromises);
+        
+        // Process results
+        const processedResults = results.map(result => {
+            if (result.status === 'fulfilled') {
+                return result.value;
+            } else {
+                return {
+                    questionIndex: 0,
+                    error: result.reason?.message || 'Unknown error',
+                    success: false
+                };
+            }
+        });
+        
+        const successfulAnswers = processedResults.filter(r => r.success);
+        const failedAnswers = processedResults.filter(r => !r.success);
         
         console.log(`Successfully solved ${successfulAnswers.length}/${questionElements.length} questions`);
-        if (failedAnswers.length > 0) {
-            console.warn('Failed questions:', failedAnswers);
-        }
+        
+        const finalMessage = `🎉 Completed! Solved ${successfulAnswers.length}/${questionElements.length} questions successfully!`;
+        showProgress(finalMessage, 'success');
         
         return {
             success: true,
             questionsCount: questionElements.length,
             successfulAnswers: successfulAnswers.length,
             failedAnswers: failedAnswers.length,
-            results: results,
-            message: `Solved ${successfulAnswers.length}/${questionElements.length} questions successfully!`
+            results: processedResults,
+            message: finalMessage
         };
         
     } catch (error) {
         console.error('Error solving MCQs:', error);
+        showProgress(`❌ Error: ${error.message}`, 'error');
         throw error;
     }
 }
 
+// Enhanced progress display function
+function showProgress(message, type = 'info') {
+    console.log(`[${type.toUpperCase()}] ${message}`);
+    
+    // Send message to popup if possible
+    try {
+        chrome.runtime.sendMessage({
+            action: 'updateProgress',
+            message: message,
+            type: type
+        });
+    } catch (e) {
+        // Popup might be closed, just log
+    }
+    
+    // Also show on page with floating notification
+    showFloatingNotification(message, type);
+}
+
+function showFloatingNotification(message, type) {
+    // Remove existing notification
+    const existing = document.getElementById('mcq-solver-notification');
+    if (existing) {
+        existing.remove();
+    }
+    
+    // Create new notification
+    const notification = document.createElement('div');
+    notification.id = 'mcq-solver-notification';
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${getTypeColor(type)};
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        font-family: Arial, sans-serif;
+        font-size: 14px;
+        z-index: 10000;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        max-width: 400px;
+        word-wrap: break-word;
+        transition: all 0.3s ease;
+    `;
+    notification.textContent = message;
+    
+    document.body.appendChild(notification);
+    
+    // Auto-remove after delay (except for progress messages)
+    if (type !== 'progress') {
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.style.opacity = '0';
+                setTimeout(() => notification.remove(), 300);
+            }
+        }, type === 'error' ? 5000 : 3000);
+    }
+}
+
+function getTypeColor(type) {
+    switch (type) {
+        case 'success': return '#4CAF50';
+        case 'error': return '#f44336';
+        case 'progress': return '#2196F3';
+        case 'info': return '#FF9800';
+        default: return '#2196F3';
+    }
+}
+
+// Updated getAnswerWithRetry with better rate limit handling for parallel requests
+async function getAnswerWithRetry(imageData, apiKey, questionNumber, domainContext, maxRetries = 5) {
+    let lastError;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            if (attempt > 1) {
+                showProgress(`Retry ${attempt}/${maxRetries} for question ${questionNumber}...`, 'progress');
+            }
+            
+            const answer = await getSingleAnswerFromGemini(imageData, apiKey, questionNumber, domainContext);
+            
+            if (answer >= 1 && answer <= 4) {
+                return answer;
+            } else {
+                throw new Error(`Invalid answer received: ${answer}`);
+            }
+            
+        } catch (error) {
+            lastError = error;
+            console.warn(`Attempt ${attempt} failed for question ${questionNumber}:`, error.message);
+            
+            if (attempt < maxRetries) {
+                // Check if it's a rate limiting error
+                if (error.message.includes('429') || error.message.includes('rate limit') || error.message.includes('quota')) {
+                    // For parallel processing, use randomized delay to spread out retries
+                    const baseDelay = 5000; // 5 seconds base
+                    const randomDelay = Math.random() * 10000; // 0-10 seconds random
+                    const attemptMultiplier = attempt * 2000; // Increase delay with attempts
+                    const waitTime = baseDelay + randomDelay + attemptMultiplier;
+                    
+                    showProgress(`⏳ Rate limit for Q${questionNumber}. Waiting ${Math.round(waitTime/1000)}s...`, 'info');
+                    await new Promise(resolve => setTimeout(resolve, waitTime));
+                } else {
+                    // For other errors, shorter randomized wait
+                    const waitTime = 2000 + (Math.random() * 3000); // 2-5 seconds
+                    showProgress(`⏳ Retrying Q${questionNumber} in ${Math.round(waitTime/1000)}s...`, 'info');
+                    await new Promise(resolve => setTimeout(resolve, waitTime));
+                }
+            }
+        }
+    }
+    
+    throw new Error(`Q${questionNumber} failed after ${maxRetries} attempts. Last error: ${lastError.message}`);
+}
+
+// Enhanced captureElementScreenshot to handle parallel processing better
 async function captureElementScreenshot(element, questionIndex) {
     return new Promise(async (resolve, reject) => {
         if (typeof html2canvas === 'undefined') {
@@ -147,20 +471,21 @@ async function captureElementScreenshot(element, questionIndex) {
 
         try {
             // Preprocess CORS images
-            console.log(`Preprocessing CORS images for question ${questionIndex + 1}...`);
             await preprocessCORSImages(element);
             
-            // Wait for images to load
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // Add small random delay to prevent all screenshots happening at exact same time
+            const randomDelay = Math.random() * 1000; // 0-1 second random delay
+            await new Promise(resolve => setTimeout(resolve, randomDelay));
             
         } catch (error) {
             console.warn(`Error preprocessing images for question ${questionIndex + 1}:`, error);
         }
 
-        // Scroll element into view
+        // Scroll element into view gently (without scrolling to bottom)
         element.scrollIntoView({behavior: 'smooth', block: 'center'});
         
-        // Wait for scroll
+        // Wait for scroll with small random delay
+        const scrollDelay = 500 + (Math.random() * 500); // 0.5-1 second
         setTimeout(() => {
             console.log(`Capturing screenshot for question ${questionIndex + 1}...`);
             
@@ -183,22 +508,60 @@ async function captureElementScreenshot(element, questionIndex) {
                     dataUrlLength: dataUrl.length
                 });
                 
-                // Save for debugging
-                // saveImageForDebugging(dataUrl, `question-${questionIndex + 1}-screenshot.png`);
-                
                 resolve(dataUrl);
             }).catch(error => {
                 console.error(`html2canvas error for question ${questionIndex + 1}:`, error);
                 reject(error);
             });
-        }, 1000);
+        }, scrollDelay);
     });
 }
 
-async function getSingleAnswerFromGemini(imageData, apiKey, questionNumber) {
+// Rate-limited API call wrapper
+class RateLimiter {
+    constructor(requestsPerMinute = 60) {
+        this.requestsPerMinute = requestsPerMinute;
+        this.requests = [];
+    }
+    
+    async waitForSlot() {
+        const now = Date.now();
+        const oneMinuteAgo = now - 60000;
+        
+        // Remove requests older than 1 minute
+        this.requests = this.requests.filter(time => time > oneMinuteAgo);
+        
+        if (this.requests.length >= this.requestsPerMinute) {
+            // Wait until the oldest request is more than 1 minute old
+            const waitTime = this.requests[0] + 60000 - now + 1000; // +1s buffer
+            console.log(`Rate limiter: waiting ${waitTime}ms`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+            return this.waitForSlot(); // Recursive call
+        }
+        
+        this.requests.push(now);
+    }
+}
+
+// Create global rate limiter
+const globalRateLimiter = new RateLimiter(50); // Slightly under the 60/min limit for safety
+
+// Updated getSingleAnswerFromGemini with rate limiting
+async function getSingleAnswerFromGemini(imageData, apiKey, questionNumber, domainContext = '') {
+    // Wait for rate limiter slot
+    await globalRateLimiter.waitForSlot();
+    
     const base64Data = imageData.split(',')[1];
     
-    const prompt = `You are an expert at solving multiple choice questions. Look at this image which contains ONE multiple choice question.
+    // Build the prompt with optional domain context
+    let prompt = `You are an expert at solving multiple choice questions. Look at this image which contains ONE multiple choice question.`;
+    
+    // Add domain context if provided
+    if (domainContext && domainContext.trim()) {
+        prompt += `\n\nDomain Context: You are dealing with questions from the domain of ${domainContext.trim()}. Use your expertise in this field to answer accurately.`;
+    }
+    
+    prompt += `
 
 Analyze the question and all the given options carefully, then choose the correct answer.
 
@@ -244,7 +607,17 @@ REMEMBER: Numbers only (1-4), never letters (A-D).`;
 
         if (!response.ok) {
             const errorText = await response.text();
-            throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
+            let errorMessage = `Gemini API error: ${response.status}`;
+            
+            if (response.status === 429) {
+                errorMessage = 'Rate limit exceeded. Will retry after waiting.';
+            } else if (response.status === 403) {
+                errorMessage = 'API key invalid or quota exceeded.';
+            } else if (response.status >= 500) {
+                errorMessage = 'Gemini server error. Will retry.';
+            }
+            
+            throw new Error(errorMessage + ` - ${errorText}`);
         }
 
         const data = await response.json();
@@ -319,7 +692,7 @@ async function selectAnswerForQuestion(questionElement, answer, questionNumber) 
         selectedInput.dispatchEvent(new Event('change', { bubbles: true }));
         selectedInput.dispatchEvent(new Event('click', { bubbles: true }));
         
-        console.log(`✓ Question ${questionNumber}: Selected option ${answer} (${selectedInput.value || 'no value'})`);
+        console.log(`✓ Question ${questionNumber}: Selected option ${answer}`);
         
         // Add visual feedback
         questionElement.style.border = '2px solid #4CAF50';
