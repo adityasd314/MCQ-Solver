@@ -19,7 +19,8 @@ A powerful Chrome extension that automatically solves multiple choice questions 
 ```bash
 # Clone the repository
 git clone https://github.com/adityasd314/MCQ-Solver.git
-
+```
+```bash
 # Or download ZIP and extract
 wget https://github.com/adityasd314/MCQ-Solver/archive/refs/heads/master.zip
 unzip master.zip
@@ -86,6 +87,7 @@ unzip master.zip
    - Click "Solve MCQs" button
    - Monitor progress - questions will be highlighted green (success) or red (failure)
 
+Tip: Use the shortcut `Ctrl + Shift + S`
 ## 🎯 Finding the Right CSS Selector
 
 ### Understanding CSS Selectors
