@@ -6,6 +6,72 @@ chrome.runtime.onInstalled.addListener(() => {
     console.log('MCQ Solver extension installed');
 });
 
+// Handle keyboard commands
+chrome.commands.onCommand.addListener(async (command) => {
+    if (command === 'solve-mcq') {
+        console.log('Solve MCQ keyboard shortcut triggered');
+        
+        try {
+            // Get the active tab
+            const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+            
+            // Get stored settings
+            const result = await chrome.storage.sync.get(['geminiApiKey', 'questionSelector', 'domainContext']);
+            
+            if (!result.geminiApiKey) {
+                console.error('No API key found. Please set it in the extension popup.');
+                // Show notification to user
+                chrome.notifications?.create({
+                    type: 'basic',
+                    iconUrl: 'icon.png', // You might want to add an icon
+                    title: 'MCQ Solver',
+                    message: 'Please set your Gemini API key in the extension popup first!'
+                });
+                return;
+            }
+            
+            const questionSelector = result.questionSelector || '.gcb-question-row';
+            const domainContext = result.domainContext || '';
+            
+            // Send message to content script to solve MCQs
+            chrome.tabs.sendMessage(tab.id, {
+                action: 'solveMCQ',
+                apiKey: result.geminiApiKey,
+                questionSelector: questionSelector,
+                domainContext: domainContext
+            }, (response) => {
+                if (chrome.runtime.lastError) {
+                    console.error('Error sending message to content script:', chrome.runtime.lastError);
+                    return;
+                }
+                
+                if (response && response.success) {
+                    console.log('MCQ solving completed:', response.message);
+                    // Show success notification
+                    chrome.notifications?.create({
+                        type: 'basic',
+                        iconUrl: 'icon.png',
+                        title: 'MCQ Solver',
+                        message: response.message
+                    });
+                } else {
+                    console.error('MCQ solving failed:', response?.error);
+                    // Show error notification
+                    chrome.notifications?.create({
+                        type: 'basic',
+                        iconUrl: 'icon.png',
+                        title: 'MCQ Solver - Error',
+                        message: response?.error || 'Failed to solve MCQs'
+                    });
+                }
+            });
+            
+        } catch (error) {
+            console.error('Error in keyboard command handler:', error);
+        }
+    }
+});
+
 // Handle messages from content script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'captureScreenshot') {
